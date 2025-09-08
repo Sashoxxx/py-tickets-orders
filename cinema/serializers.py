@@ -105,6 +105,20 @@ class TicketSerializer(serializers.ModelSerializer):
         model = Ticket
         fields = ["row", "seat", "movie_session"]
 
+    def validate(self, attrs):
+        movie_session = attrs.get("movie_session")
+        row = attrs.get("row")
+        seat = attrs.get("seat")
+
+        if Ticket.objects.filter(
+            movie_session=movie_session, row=row, seat=seat
+        ).exists():
+            raise serializers.ValidationError(
+                f"Seat {row}-{seat} is already taken for this movie session"
+            )
+
+        return attrs
+
 
 class TicketDetailSerializer(TicketSerializer):
     movie_session = MovieSessionListSerializer(read_only=True)
@@ -119,6 +133,15 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ("tickets",)
+
+    def create(self, validated_data):
+        tickets_data = validated_data.pop("tickets", [])
+        order = Order.objects.create(user=self.context["request"].user)
+
+        for ticket_data in tickets_data:
+            Ticket.objects.create(order=order, **ticket_data)
+
+        return order
 
 
 class OrderDetailSerializer(serializers.ModelSerializer):
